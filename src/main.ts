@@ -7,6 +7,8 @@ import "./style.css"; // project page style
 
 // Fix missing marker images when bundling
 import "./_leafletWorkaround.ts";
+// Deterministic randomness helper
+import luck from "./_luck.ts";
 
 // Create basic UI elements
 const controlPanelDiv = document.createElement("div");
@@ -29,12 +31,14 @@ const CLASSROOM_LATLNG = leaflet.latLng(
 
 // Tunable gameplay parameters
 const GAMEPLAY_ZOOM_LEVEL = 19;
-// Size of a single tile/cell in degrees (latitude/longitude)
 const TILE_DEGREES = 1e-4;
-// How many cells to draw in each direction from the origin
 const NEIGHBORHOOD_SIZE = 8;
+// Chance a given cell will contain a cache/token
+const CACHE_SPAWN_PROBABILITY = 0.1;
+// How many cells away (inclusive) the player can interact with a cache
+const PROXIMITY_CELLS = 3;
 
-// Create the map
+// Create the map (element with id "map" is defined in index.html)
 const map = leaflet.map(mapDiv, {
   center: CLASSROOM_LATLNG,
   zoom: GAMEPLAY_ZOOM_LEVEL,
@@ -58,9 +62,41 @@ const playerMarker = leaflet.marker(CLASSROOM_LATLNG);
 playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
-// Display the player's points (unused for now)
-const _playerPoints = 0;
-statusPanelDiv.innerHTML = "No points yet...";
+// Inventory: list of token values the player has picked up
+const inventory: number[] = [];
+
+function updateInventoryDisplay() {
+  if (inventory.length === 0) {
+    statusPanelDiv.innerHTML = "Inventory: (empty)";
+    return;
+  }
+  const total = inventory.reduce((s, v) => s + v, 0);
+  statusPanelDiv.innerHTML = `Inventory: ${
+    inventory.join(", ")
+  } (total: ${total})`;
+}
+
+updateInventoryDisplay();
+
+// Helpers: convert lat/lng to cell coordinates (i,j) relative to classroom
+function latLngToCell(latlng: leaflet.LatLngExpression): [number, number] {
+  const position = leaflet.latLng(latlng);
+  const latPosition = Math.round(
+    (position.lat - CLASSROOM_LATLNG.lat) / TILE_DEGREES,
+  );
+  const lngPosition = Math.round(
+    (position.lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES,
+  );
+  return [latPosition, lngPosition];
+}
+
+function getPlayerCell(): [number, number] {
+  return latLngToCell(playerMarker.getLatLng());
+}
+
+function cellDistance(a: [number, number], b: [number, number]): number {
+  return Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]));
+}
 
 // Draw a single rectangular cell on the map at cell coordinates i,j
 function drawCell(i: number, j: number) {
@@ -81,7 +117,55 @@ function drawCell(i: number, j: number) {
   });
   rect.addTo(map);
 
-  rect.bindPopup(`Cell: ${i}, ${j}`);
+  // Cache Spawner
+  if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
+    // Cache Value based on luck
+    const pointValue = Math.floor(
+      luck([i, j, "initialValue"].toString()) * 100,
+    );
+
+    // Represent cache as a small circle marker in the cell center
+    const center = bounds.getCenter();
+    const cacheMarker = leaflet.circleMarker(center, {
+      radius: 6,
+      color: "#e31a1c",
+      fillColor: "#fb9a99",
+      fillOpacity: 0.9,
+    });
+    cacheMarker.addTo(map);
+
+    // Bind a popup offering to pick up the token
+    cacheMarker.bindPopup(() => {
+      const popupDiv = document.createElement("div");
+      popupDiv.innerHTML = `
+                  <div>There is a cache here at "${i},${j}". It has value <span id="value">${pointValue}</span>.</div>
+                  <button id="pickup">Pick up</button>
+                  <div id="pickupMsg" style="margin-top:.4rem;color:#b10000"></div>`;
+
+      popupDiv
+        .querySelector<HTMLButtonElement>("#pickup")!
+        .addEventListener("click", () => {
+          const playerCell = getPlayerCell();
+          const dist = cellDistance(playerCell, [i, j]);
+          const msgDiv = popupDiv.querySelector<HTMLDivElement>("#pickupMsg")!;
+          if (dist <= PROXIMITY_CELLS) {
+            // Remove the cache from the map and add to inventory
+            cacheMarker.remove();
+            inventory.push(pointValue);
+            updateInventoryDisplay();
+            msgDiv.innerText = "Picked up.";
+          } else {
+            msgDiv.innerText =
+              `Too far (${dist} cells). Move within ${PROXIMITY_CELLS} cells to pick up.`;
+          }
+        });
+
+      return popupDiv;
+    });
+  } else {
+    // No cache: bind a simple info popup to the cell
+    rect.bindPopup(`Cell: ${i}, ${j}`);
+  }
 }
 
 // Draw a grid of cells around the origin using loops
