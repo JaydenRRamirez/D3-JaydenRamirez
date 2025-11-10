@@ -50,7 +50,7 @@ const map = leaflet.map(mapDiv, {
 
 // Populate the map with a background tile layer
 leaflet
-  .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  .tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
     maxZoom: 19,
     attribution:
       '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -71,12 +71,131 @@ function updateInventoryDisplay() {
     return;
   }
   const total = inventory.reduce((s, v) => s + v, 0);
+  // Show the raw inventory and the running total
+  const counts = groupInventory();
+  const craftable = Array.from(counts.entries())
+    .filter(([, c]) => c >= 2)
+    .map(([v]) => v);
+
+  const craftableText = craftable.length
+    ? `Craftable: ${craftable.join(", ")}`
+    : "Craftable: none";
+
   statusPanelDiv.innerHTML = `Inventory: ${
     inventory.join(", ")
-  } (total: ${total})`;
+  } (total: ${total})<br>${craftableText}<br>Has suitable token: ${
+    craftable.length > 0 ? "yes" : "no"
+  }`;
 }
 
 updateInventoryDisplay();
+
+// --- Crafting helpers and UI ---
+function groupInventory(): Map<number, number> {
+  const counts = new Map<number, number>();
+  for (const v of inventory) counts.set(v, (counts.get(v) ?? 0) + 1);
+  return counts;
+}
+
+function canCraft(value: number): boolean {
+  const counts = groupInventory();
+  return (counts.get(value) ?? 0) >= 2;
+}
+
+function doCraft(value: number) {
+  if (!canCraft(value)) return false;
+  // remove two tokens of the given value
+  let removed = 0;
+  for (let i = inventory.length - 1; i >= 0 && removed < 2; i--) {
+    if (inventory[i] === value) {
+      inventory.splice(i, 1);
+      removed++;
+    }
+  }
+  // add the new doubled token
+  inventory.push(value * 2);
+  updateInventoryDisplay();
+  renderCraftingUI();
+  return true;
+}
+
+function renderCraftingUI() {
+  controlPanelDiv.innerHTML = "";
+  const title = document.createElement("div");
+  title.innerText = "Crafting";
+  title.style.fontWeight = "600";
+  title.style.marginBottom = "0.5rem";
+  controlPanelDiv.append(title);
+
+  const counts = Array.from(groupInventory().entries()).sort((a, b) =>
+    b[0] - a[0]
+  );
+  if (counts.length === 0) {
+    const p = document.createElement("div");
+    p.innerText = "No tokens to craft.";
+    controlPanelDiv.append(p);
+    return;
+  }
+
+  // Summary: which values are currently craftable
+  const craftable = counts.filter((pair) => pair[1] >= 2).map((pair) =>
+    pair[0]
+  );
+  const summary = document.createElement("div");
+  summary.style.marginBottom = "0.5rem";
+  summary.innerText = craftable.length
+    ? `Craftable now: ${craftable.join(", ")}`
+    : "No craftable token values right now.";
+  controlPanelDiv.append(summary);
+
+  for (const [value, count] of counts) {
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.alignItems = "center";
+    row.style.gap = "0.5rem";
+
+    const label = document.createElement("div");
+    label.innerText = `${value} × ${count}`;
+    row.append(label);
+
+    const craftBtn = document.createElement("button");
+    craftBtn.innerText = "Craft (x2 -> " + value * 2 + ")";
+    craftBtn.disabled = count < 2;
+
+    const msg = document.createElement("div");
+    msg.style.color = "#b10000";
+    msg.style.fontSize = "0.9rem";
+    msg.style.marginLeft = "0.5rem";
+    row.append(msg);
+
+    craftBtn.addEventListener("click", () => {
+      // Parameter validation to check if the token is valid to combine
+      if (!Number.isFinite(value) || value <= 0 || !Number.isInteger(value)) {
+        msg.innerText = "Invalid token value.";
+        return;
+      }
+      if (!canCraft(value)) {
+        msg.innerText = "Not enough matching tokens to craft.";
+        return;
+      }
+
+      const ok = doCraft(value);
+      if (ok) {
+        craftBtn.innerText = `Crafted → ${value * 2}`;
+        msg.innerText = "Crafted successfully.";
+        setTimeout(() => renderCraftingUI(), 400);
+      } else {
+        msg.innerText = "Craft failed.";
+      }
+    });
+    row.append(craftBtn);
+
+    controlPanelDiv.append(row);
+  }
+}
+
+// Render crafting UI initially and whenever inventory changes
+renderCraftingUI();
 
 // Helpers: convert lat/lng to cell coordinates (i,j) relative to classroom
 function latLngToCell(latlng: leaflet.LatLngExpression): [number, number] {
@@ -117,9 +236,9 @@ function drawCell(i: number, j: number) {
   });
   rect.addTo(map);
 
-  // Cache Spawner
+  // Maybe spawn a cache on this cell
   if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
-    // Cache Value based on luck
+    // Each cache has an initial value derived from luck
     const pointValue = Math.floor(
       luck([i, j, "initialValue"].toString()) * 100,
     );
@@ -134,7 +253,7 @@ function drawCell(i: number, j: number) {
     });
     cacheMarker.addTo(map);
 
-    // Bind a popup offering to pick up the token
+    // The popup offers a description and button
     cacheMarker.bindPopup(() => {
       const popupDiv = document.createElement("div");
       popupDiv.innerHTML = `
@@ -153,6 +272,8 @@ function drawCell(i: number, j: number) {
             cacheMarker.remove();
             inventory.push(pointValue);
             updateInventoryDisplay();
+            // Update crafting UI when inventory changes
+            renderCraftingUI();
             msgDiv.innerText = "Picked up.";
           } else {
             msgDiv.innerText =

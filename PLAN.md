@@ -26,5 +26,8 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 - [x] draw the player's location on the map
 - [x] draw a rectangle representing one cell on the map
 - [x] use loops to draw a whole grid of cells on the map
-- [] Inventory implementation. Pick up token from a cell, and ensure it is removed from cell.
-- [] Display the value of Tokens owned.
+- [x] Inventory implementation. Pick up token from a cell, and ensure it is removed from cell.
+- [x] Display the value of Tokens owned.
+- [x] Crafting functionality. Be able to place a token of equal value then produce a token doubled the value of the original.
+- [x] Parameter check. Don't allow a token if it's not the sufficient value.
+- [x] Display if the player does have a suitable token.
