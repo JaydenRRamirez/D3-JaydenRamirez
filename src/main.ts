@@ -62,30 +62,79 @@ const playerMarker = leaflet.marker(CLASSROOM_LATLNG);
 playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
-// Inventory: list of token values the player has picked up
-const inventory: number[] = [];
+// Inventory: player may carry at most one token (value) or none
+let inventory: number | null = null;
+
+// Track caches on the map by cell key "i,j" so we can update or combine them
+const caches = new Map<
+  string,
+  { marker: leaflet.CircleMarker; value: number }
+>();
+
+// Win state
+let hasCrafted = false;
+
+function triggerWin() {
+  if (hasCrafted) return;
+  hasCrafted = true;
+  const overlay = document.createElement("div");
+  overlay.style.position = "fixed";
+  overlay.style.inset = "0";
+  overlay.style.background = "rgba(0,0,0,0.5)";
+  overlay.style.display = "flex";
+  overlay.style.alignItems = "center";
+  overlay.style.justifyContent = "center";
+  overlay.style.zIndex = "2000";
+
+  const box = document.createElement("div");
+  box.style.background = "white";
+  box.style.padding = "2rem";
+  box.style.borderRadius = "8px";
+  box.style.boxShadow = "0 8px 32px rgba(0,0,0,0.25)";
+  box.style.textAlign = "center";
+
+  const title = document.createElement("h2");
+  title.innerText = "You Win!";
+  box.append(title);
+
+  const close = document.createElement("button");
+  close.innerText = "Close";
+  close.style.padding = "0.5rem 1rem";
+  close.addEventListener("click", () => overlay.remove());
+  box.append(close);
+
+  overlay.append(box);
+  document.body.append(overlay);
+}
+
+// Update cache marker colors: green = pickable, red = out of reach or blocked
+function updateCacheMarkerColor(key: string) {
+  const entry = caches.get(key);
+  if (!entry) return;
+  const [iStr, jStr] = key.split(",");
+  const i = Number(iStr);
+  const j = Number(jStr);
+  const playerCell = getPlayerCell();
+  const dist = cellDistance(playerCell, [i, j]);
+  const pickable = dist <= PROXIMITY_CELLS && inventory === null;
+  entry.marker.setStyle({
+    color: pickable ? "#2a9d41" : "#e31a1c",
+    fillColor: pickable ? "#7be495" : "#fb9a99",
+  });
+}
+
+function updateAllCacheColors() {
+  for (const key of caches.keys()) updateCacheMarkerColor(key);
+}
 
 function updateInventoryDisplay() {
-  if (inventory.length === 0) {
-    statusPanelDiv.innerHTML = "Inventory: (empty)";
+  if (inventory === null) {
+    statusPanelDiv.innerHTML = "Inventory: (empty)<br>Has suitable token: no";
     return;
   }
-  const total = inventory.reduce((s, v) => s + v, 0);
-  // Show the raw inventory and the running total
-  const counts = groupInventory();
-  const craftable = Array.from(counts.entries())
-    .filter(([, c]) => c >= 2)
-    .map(([v]) => v);
-
-  const craftableText = craftable.length
-    ? `Craftable: ${craftable.join(", ")}`
-    : "Craftable: none";
-
-  statusPanelDiv.innerHTML = `Inventory: ${
-    inventory.join(", ")
-  } (total: ${total})<br>${craftableText}<br>Has suitable token: ${
-    craftable.length > 0 ? "yes" : "no"
-  }`;
+  const total = inventory;
+  statusPanelDiv.innerHTML =
+    `Inventory: ${inventory} (total: ${total})<br>Has suitable token: no`;
 }
 
 updateInventoryDisplay();
@@ -93,105 +142,41 @@ updateInventoryDisplay();
 // --- Crafting helpers and UI ---
 function groupInventory(): Map<number, number> {
   const counts = new Map<number, number>();
-  for (const v of inventory) counts.set(v, (counts.get(v) ?? 0) + 1);
+  if (inventory !== null) {
+    counts.set(inventory, (counts.get(inventory) ?? 0) + 1);
+  }
   return counts;
 }
 
-function canCraft(value: number): boolean {
+function _canCraft(value: number): boolean {
   const counts = groupInventory();
   return (counts.get(value) ?? 0) >= 2;
-}
-
-function doCraft(value: number) {
-  if (!canCraft(value)) return false;
-  // remove two tokens of the given value
-  let removed = 0;
-  for (let i = inventory.length - 1; i >= 0 && removed < 2; i--) {
-    if (inventory[i] === value) {
-      inventory.splice(i, 1);
-      removed++;
-    }
-  }
-  // add the new doubled token
-  inventory.push(value * 2);
-  updateInventoryDisplay();
-  renderCraftingUI();
-  return true;
 }
 
 function renderCraftingUI() {
   controlPanelDiv.innerHTML = "";
   const title = document.createElement("div");
-  title.innerText = "Crafting";
+  title.innerText = "Instructions";
   title.style.fontWeight = "600";
   title.style.marginBottom = "0.5rem";
   controlPanelDiv.append(title);
 
-  const counts = Array.from(groupInventory().entries()).sort((a, b) =>
-    b[0] - a[0]
-  );
-  if (counts.length === 0) {
-    const p = document.createElement("div");
-    p.innerText = "No tokens to craft.";
-    controlPanelDiv.append(p);
-    return;
-  }
+  const p1 = document.createElement("div");
+  p1.innerHTML =
+    `Click on a cache indicated by the various markers on display. Green means you can pick it up, red means it's out of reach or blocked.`;
+  p1.style.marginBottom = "0.5rem";
+  controlPanelDiv.append(p1);
 
-  // Summary: which values are currently craftable
-  const craftable = counts.filter((pair) => pair[1] >= 2).map((pair) =>
-    pair[0]
-  );
-  const summary = document.createElement("div");
-  summary.style.marginBottom = "0.5rem";
-  summary.innerText = craftable.length
-    ? `Craftable now: ${craftable.join(", ")}`
-    : "No craftable token values right now.";
-  controlPanelDiv.append(summary);
+  const p2 = document.createElement("div");
+  p2.innerHTML =
+    `Pick up: Open a cache popup within ${PROXIMITY_CELLS} cells and click <strong>Pick up</strong>. You can carry at most one token.`;
+  p2.style.marginBottom = "0.5rem";
+  controlPanelDiv.append(p1);
 
-  for (const [value, count] of counts) {
-    const row = document.createElement("div");
-    row.style.display = "flex";
-    row.style.alignItems = "center";
-    row.style.gap = "0.5rem";
-
-    const label = document.createElement("div");
-    label.innerText = `${value} × ${count}`;
-    row.append(label);
-
-    const craftBtn = document.createElement("button");
-    craftBtn.innerText = "Craft (x2 -> " + value * 2 + ")";
-    craftBtn.disabled = count < 2;
-
-    const msg = document.createElement("div");
-    msg.style.color = "#b10000";
-    msg.style.fontSize = "0.9rem";
-    msg.style.marginLeft = "0.5rem";
-    row.append(msg);
-
-    craftBtn.addEventListener("click", () => {
-      // Parameter validation to check if the token is valid to combine
-      if (!Number.isFinite(value) || value <= 0 || !Number.isInteger(value)) {
-        msg.innerText = "Invalid token value.";
-        return;
-      }
-      if (!canCraft(value)) {
-        msg.innerText = "Not enough matching tokens to craft.";
-        return;
-      }
-
-      const ok = doCraft(value);
-      if (ok) {
-        craftBtn.innerText = `Crafted → ${value * 2}`;
-        msg.innerText = "Crafted successfully.";
-        setTimeout(() => renderCraftingUI(), 400);
-      } else {
-        msg.innerText = "Craft failed.";
-      }
-    });
-    row.append(craftBtn);
-
-    controlPanelDiv.append(row);
-  }
+  const p3 = document.createElement("div");
+  p3.innerHTML =
+    `Place: Open a cache popup on a cell that contains a token of the same value and click <strong>Place token</strong> to combine them.`;
+  controlPanelDiv.append(p3);
 }
 
 // Render crafting UI initially and whenever inventory changes
@@ -238,10 +223,12 @@ function drawCell(i: number, j: number) {
 
   // Maybe spawn a cache on this cell
   if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
-    // Each cache has an initial value derived from luck
-    const pointValue = Math.floor(
-      luck([i, j, "initialValue"].toString()) * 100,
-    );
+    // Bias values toward 1 and 2 to make combining more likely
+    const r = luck([i, j, "initialValue"].toString());
+    let cacheValue: number;
+    if (r < 0.7) cacheValue = 1;
+    else if (r < 0.95) cacheValue = 2;
+    else cacheValue = 3;
 
     // Represent cache as a small circle marker in the cell center
     const center = bounds.getCenter();
@@ -253,33 +240,80 @@ function drawCell(i: number, j: number) {
     });
     cacheMarker.addTo(map);
 
-    // The popup offers a description and button
+    const key = `${i},${j}`;
+    caches.set(key, { marker: cacheMarker, value: cacheValue });
+    // Set initial color based on proximity
+    updateCacheMarkerColor(key);
+
+    // The popup offers a description and buttons for pickup/place
     cacheMarker.bindPopup(() => {
       const popupDiv = document.createElement("div");
+      const cached = caches.get(key)!;
       popupDiv.innerHTML = `
-                  <div>There is a cache here at "${i},${j}". It has value <span id="value">${pointValue}</span>.</div>
+                  <div>There is a cache here at "${i},${j}". It has value <span id="value">${cached.value}</span>.</div>
                   <button id="pickup">Pick up</button>
+                  <button id="place" style="margin-left:.5rem">Place token</button>
                   <div id="pickupMsg" style="margin-top:.4rem;color:#b10000"></div>`;
 
-      popupDiv
-        .querySelector<HTMLButtonElement>("#pickup")!
-        .addEventListener("click", () => {
-          const playerCell = getPlayerCell();
-          const dist = cellDistance(playerCell, [i, j]);
-          const msgDiv = popupDiv.querySelector<HTMLDivElement>("#pickupMsg")!;
-          if (dist <= PROXIMITY_CELLS) {
-            // Remove the cache from the map and add to inventory
-            cacheMarker.remove();
-            inventory.push(pointValue);
+      const pickupBtn = popupDiv.querySelector<HTMLButtonElement>("#pickup")!;
+      const placeBtn = popupDiv.querySelector<HTMLButtonElement>("#place")!;
+      const msgDiv = popupDiv.querySelector<HTMLDivElement>("#pickupMsg")!;
+
+      pickupBtn.addEventListener("click", () => {
+        const playerCell = getPlayerCell();
+        const dist = cellDistance(playerCell, [i, j]);
+        if (dist <= PROXIMITY_CELLS) {
+          if (inventory === null) {
+            // pick up: remove marker and store value
+            cached.marker.remove();
+            caches.delete(key);
+            inventory = cached.value;
             updateInventoryDisplay();
-            // Update crafting UI when inventory changes
             renderCraftingUI();
             msgDiv.innerText = "Picked up.";
+            // refresh colors for remaining caches
+            updateAllCacheColors();
           } else {
             msgDiv.innerText =
-              `Too far (${dist} cells). Move within ${PROXIMITY_CELLS} cells to pick up.`;
+              "You're already carrying a token. Drop it before picking up another.";
           }
-        });
+        } else {
+          msgDiv.innerText =
+            `Too far (${dist} cells). Move within ${PROXIMITY_CELLS} cells to pick up.`;
+        }
+      });
+
+      placeBtn.addEventListener("click", () => {
+        const playerCell = getPlayerCell();
+        const dist = cellDistance(playerCell, [i, j]);
+        if (dist > PROXIMITY_CELLS) {
+          msgDiv.innerText =
+            `Too far (${dist} cells). Move within ${PROXIMITY_CELLS} cells to place.`;
+          return;
+        }
+        if (inventory === null) {
+          msgDiv.innerText = "You have no token to place.";
+          return;
+        }
+        // Combine if values match
+        if (inventory === cached.value) {
+          cached.value = cached.value * 2;
+          // update visible value in popup
+          const valSpan = popupDiv.querySelector<HTMLSpanElement>("#value");
+          if (valSpan) valSpan.innerText = String(cached.value);
+          // consume carried token
+          inventory = null;
+          updateInventoryDisplay();
+          renderCraftingUI();
+          msgDiv.innerText = `Placed token and crafted ${cached.value}.`;
+          // after placing, update colors (player now empty-handed)
+          updateAllCacheColors();
+          // Trigger win on first successful craft
+          if (!hasCrafted) triggerWin();
+        } else {
+          msgDiv.innerText = "Token values do not match; cannot place here.";
+        }
+      });
 
       return popupDiv;
     });
@@ -295,3 +329,6 @@ for (let i = -NEIGHBORHOOD_SIZE; i < NEIGHBORHOOD_SIZE; i++) {
     drawCell(i, j);
   }
 }
+
+// After all caches are created, set initial colors based on proximity
+updateAllCacheColors();
