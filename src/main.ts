@@ -32,7 +32,6 @@ const CLASSROOM_LATLNG = leaflet.latLng(
 // Tunable gameplay parameters
 const GAMEPLAY_ZOOM_LEVEL = 19;
 const TILE_DEGREES = 1e-4;
-const NEIGHBORHOOD_SIZE = 8;
 // Chance a given cell will contain a cache/token
 const CACHE_SPAWN_PROBABILITY = 0.1;
 // How many cells away (inclusive) the player can interact with a cache
@@ -70,6 +69,15 @@ const caches = new Map<
   string,
   { marker: leaflet.CircleMarker; value: number }
 >();
+
+type CellRecord = {
+  i: number;
+  j: number;
+  rect: leaflet.Rectangle;
+};
+
+// Keep a record of currently rendered cells keyed by "i,j".
+const cellRecords = new Map<string, CellRecord>();
 
 // Win state
 let hasCrafted = false;
@@ -189,6 +197,76 @@ function cellDistance(a: [number, number], b: [number, number]): number {
   return Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]));
 }
 
+function cellKey(i: number, j: number) {
+  return `${i},${j}`;
+}
+
+// Function to render a cell if not already rendered.
+function cellRendered(i: number, j: number) {
+  const key = cellKey(i, j);
+  if (cellRecords.has(key)) return;
+  const rect = drawCell(i, j);
+  cellRecords.set(key, { i, j, rect });
+}
+
+// Remove a cell from the map, cleans cache if present.
+function removeCell(i: number, j: number) {
+  const key = cellKey(i, j);
+  const rec = cellRecords.get(key);
+  if (rec) {
+    try {
+      rec.rect.remove();
+    } catch {
+      /* ignore */
+    }
+    cellRecords.delete(key);
+  }
+  const cache = caches.get(key);
+  if (cache) {
+    try {
+      cache.marker.remove();
+    } catch {
+      /* ignore */
+    }
+    caches.delete(key);
+  }
+}
+
+// Update cells that are visible in the current map and rendered accordingly.
+function updateVisibleCells() {
+  const bounds = map.getBounds();
+  const south = bounds.getSouth();
+  const north = bounds.getNorth();
+  const west = bounds.getWest();
+  const east = bounds.getEast();
+
+  const southMin = Math.floor((south - CLASSROOM_LATLNG.lat) / TILE_DEGREES);
+  const northMax = Math.floor((north - CLASSROOM_LATLNG.lat) / TILE_DEGREES);
+  const westMin = Math.floor((west - CLASSROOM_LATLNG.lng) / TILE_DEGREES);
+  const eastMax = Math.floor((east - CLASSROOM_LATLNG.lng) / TILE_DEGREES);
+
+  // Build a set of requested/visible keys
+  const wanted = new Set<string>();
+  for (let i = southMin; i <= northMax; i++) {
+    for (let j = westMin; j <= eastMax; j++) {
+      wanted.add(cellKey(i, j));
+      if (!cellRecords.has(cellKey(i, j))) {
+        cellRendered(i, j);
+      }
+    }
+  }
+
+  // Remove any rendered cells that aren't wanted
+  for (const key of Array.from(cellRecords.keys())) {
+    if (!wanted.has(key)) {
+      const [iStr, jStr] = key.split(",");
+      removeCell(Number(iStr), Number(jStr));
+    }
+  }
+
+  updateAllCacheColors();
+}
+
 // -- Player movement ---
 function movePlayerByCells(latitudeUpdate: number, longitudeUpdate: number) {
   const current = playerMarker.getLatLng();
@@ -200,9 +278,10 @@ function movePlayerByCells(latitudeUpdate: number, longitudeUpdate: number) {
   try {
     map.panTo(newLatLng);
   } catch {
-    /* ignore if pan isn't available */
+    /* ignore */
   }
-  updateAllCacheColors();
+  // Update visible cells (may spawn/despawn) and refresh colors
+  updateVisibleCells();
 }
 
 // Keyboard handling
@@ -335,14 +414,14 @@ function drawCell(i: number, j: number) {
     // No cache: bind a simple info popup to the cell
     rect.bindPopup(`Cell: ${i}, ${j}`);
   }
+  // Return the rectangle so callers can keep track of rendered cells
+  return rect;
 }
 
-// Draw a grid of cells around the origin using loops
-for (let i = -NEIGHBORHOOD_SIZE; i < NEIGHBORHOOD_SIZE; i++) {
-  for (let j = -NEIGHBORHOOD_SIZE; j < NEIGHBORHOOD_SIZE; j++) {
-    drawCell(i, j);
-  }
-}
+updateVisibleCells();
 
-// After all caches are created, set initial colors based on proximity
+map.on("moveend", () => {
+  updateVisibleCells();
+});
+
 updateAllCacheColors();
