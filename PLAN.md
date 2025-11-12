@@ -31,3 +31,6 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 - [x] Crafting functionality. Be able to place a token of equal value then produce a token doubled the value of the original.
 - [x] Parameter check. Don't allow a token if it's not the sufficient value.
 - [x] Display if the player does have a suitable token.
+- [] Implement Player Movement, bound by the arrow key binds. Only cells near current location are available.
+- [] Make it so cells forget their state when they aren't visible on screen. Players should farm tokens by moving in and out of the visibility range.
+- [] Make it so players can craft tokens of a higher value, update and increase threshold value for the win state.
