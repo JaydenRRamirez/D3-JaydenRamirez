@@ -36,7 +36,7 @@ const NEIGHBORHOOD_SIZE = 8;
 // Chance a given cell will contain a cache/token
 const CACHE_SPAWN_PROBABILITY = 0.1;
 // How many cells away (inclusive) the player can interact with a cache
-const PROXIMITY_CELLS = 3;
+const PROXIMITY_CELLS = 1;
 
 // Create the map (element with id "map" is defined in index.html)
 const map = leaflet.map(mapDiv, {
@@ -139,20 +139,7 @@ function updateInventoryDisplay() {
 
 updateInventoryDisplay();
 
-// --- Crafting helpers and UI ---
-function groupInventory(): Map<number, number> {
-  const counts = new Map<number, number>();
-  if (inventory !== null) {
-    counts.set(inventory, (counts.get(inventory) ?? 0) + 1);
-  }
-  return counts;
-}
-
-function _canCraft(value: number): boolean {
-  const counts = groupInventory();
-  return (counts.get(value) ?? 0) >= 2;
-}
-
+// --- UI ---
 function renderCraftingUI() {
   controlPanelDiv.innerHTML = "";
   const title = document.createElement("div");
@@ -201,6 +188,33 @@ function getPlayerCell(): [number, number] {
 function cellDistance(a: [number, number], b: [number, number]): number {
   return Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]));
 }
+
+// -- Player movement ---
+function movePlayerByCells(latitudeUpdate: number, longitudeUpdate: number) {
+  const current = playerMarker.getLatLng();
+  const newLat = current.lat + latitudeUpdate * TILE_DEGREES;
+  const newLng = current.lng + longitudeUpdate * TILE_DEGREES;
+  const newLatLng = leaflet.latLng(newLat, newLng);
+  playerMarker.setLatLng(newLatLng);
+  // Pan the map to keep the player visible
+  try {
+    map.panTo(newLatLng);
+  } catch {
+    /* ignore if pan isn't available */
+  }
+  updateAllCacheColors();
+}
+
+// Keyboard handling
+globalThis.addEventListener("keydown", (e: KeyboardEvent) => {
+  const tag = (document.activeElement && document.activeElement.tagName) || "";
+  if (tag === "INPUT" || tag === "TEXTAREA") return;
+  const key = e.key.toLowerCase();
+  if (key === "w") movePlayerByCells(1, 0);
+  else if (key === "s") movePlayerByCells(-1, 0);
+  else if (key === "a") movePlayerByCells(0, -1);
+  else if (key === "d") movePlayerByCells(0, 1);
+});
 
 // Draw a single rectangular cell on the map at cell coordinates i,j
 function drawCell(i: number, j: number) {
