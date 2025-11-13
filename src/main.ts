@@ -36,6 +36,8 @@ const TILE_DEGREES = 1e-4;
 const CACHE_SPAWN_PROBABILITY = 0.1;
 // How many cells away (inclusive) the player can interact with a cache
 const PROXIMITY_CELLS = 1;
+// Value required on a single cache to win the game
+const WIN_THRESHOLD = 5;
 
 // Create the map (element with id "map" is defined in index.html)
 const map = leaflet.map(mapDiv, {
@@ -125,9 +127,20 @@ function updateCacheMarkerColor(key: string) {
   const playerCell = getPlayerCell();
   const dist = cellDistance(playerCell, [i, j]);
   const pickable = dist <= PROXIMITY_CELLS && inventory === null;
+  // Distinct colors for the different token values
+  const valueFill: Record<number, string> = {
+    1: "#fee8c8",
+    2: "#ffd59e",
+    3: "#ffb482",
+    4: "#ff8a5f",
+    5: "#ff5e3a",
+  };
+  const fill = valueFill[entry.value] ?? "#cccccc";
+  const stroke = pickable ? "#2a9d41" : "#5f5f5fff";
   entry.marker.setStyle({
-    color: pickable ? "#2a9d41" : "#e31a1c",
-    fillColor: pickable ? "#7be495" : "#fb9a99",
+    color: stroke,
+    fillColor: fill,
+    fillOpacity: 0.9,
   });
 }
 
@@ -137,12 +150,12 @@ function updateAllCacheColors() {
 
 function updateInventoryDisplay() {
   if (inventory === null) {
-    statusPanelDiv.innerHTML = "Inventory: (empty)<br>Has suitable token: no";
+    statusPanelDiv.innerHTML = "Inventory: (empty)<br>Has token: no";
     return;
   }
   const total = inventory;
   statusPanelDiv.innerHTML =
-    `Inventory: ${inventory} (total: ${total})<br>Has suitable token: no`;
+    `Inventory: ${inventory} (total: ${total})<br>Has token: yes`;
 }
 
 updateInventoryDisplay();
@@ -172,6 +185,11 @@ function renderCraftingUI() {
   p3.innerHTML =
     `Place: Open a cache popup on a cell that contains a token of the same value and click <strong>Place token</strong> to combine them.`;
   controlPanelDiv.append(p3);
+  const p4 = document.createElement("div");
+  p4.style.marginTop = "0.6rem";
+  p4.innerHTML =
+    `Win condition: craft a single cache with that has a value of 5 or beyond.`;
+  controlPanelDiv.append(p4);
 }
 
 // Render crafting UI initially and whenever inventory changes
@@ -316,19 +334,20 @@ function drawCell(i: number, j: number) {
 
   // Maybe spawn a cache on this cell
   if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
-    // Bias values toward 1 and 2 to make combining more likely
+    // Bias values toward 1 and 2 but occasionally spawn larger tokens
     const r = luck([i, j, "initialValue"].toString());
     let cacheValue: number;
-    if (r < 0.7) cacheValue = 1;
-    else if (r < 0.95) cacheValue = 2;
-    else cacheValue = 3;
+    if (r < 0.6) cacheValue = 1;
+    else if (r < 0.9) cacheValue = 2;
+    else if (r < 0.97) cacheValue = 3;
+    else if (r < 0.995) cacheValue = 4;
+    else cacheValue = 5;
 
     // Represent cache as a small circle marker in the cell center
     const center = bounds.getCenter();
     const cacheMarker = leaflet.circleMarker(center, {
       radius: 6,
-      color: "#e31a1c",
-      fillColor: "#fb9a99",
+      color: "#222222",
       fillOpacity: 0.9,
     });
     cacheMarker.addTo(map);
@@ -401,8 +420,10 @@ function drawCell(i: number, j: number) {
           msgDiv.innerText = `Placed token and crafted ${cached.value}.`;
           // after placing, update colors (player now empty-handed)
           updateAllCacheColors();
-          // Trigger win on first successful craft
-          if (!hasCrafted) triggerWin();
+          // Trigger win when the cache reaches or exceeds the threshold
+          if (!hasCrafted && cached.value >= WIN_THRESHOLD) {
+            triggerWin();
+          }
         } else {
           msgDiv.innerText = "Token values do not match; cannot place here.";
         }

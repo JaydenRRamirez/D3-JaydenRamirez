@@ -34,4 +34,4 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 - [x] Implement Player Movement, bound by the WSAD key binds.
 - [x] Update Token interaction, so that tokens can only be interacted 1 cell near the player, instead of the current 3.
 - [x] Make it so cells forget their state when they aren't visible on screen. Players should farm tokens by moving in and out of the visibility range. As the player moves, cells continue to be visible all the way out to the edge of the map.
-- [] Make it so players can craft tokens of a higher value, update and increase threshold value for the win state.
+- [x] Make it so players can craft tokens of a higher value, update and increase threshold value for the win state.
