@@ -432,8 +432,126 @@ function drawCell(i: number, j: number) {
       return popupDiv;
     });
   } else {
-    // No cache: bind a simple info popup to the cell
-    rect.bindPopup(`Cell: ${i}, ${j}`);
+    // No cache: bind a popup that allows dropping a carried token here
+    rect.bindPopup(() => {
+      const popupDiv = document.createElement("div");
+      popupDiv.innerHTML = `
+                <div>Cell: ${i}, ${j}</div>
+                <button id="drop">Drop token here</button>
+                <div id="dropMsg" style="margin-top:.4rem;color:#b10000"></div>`;
+      const dropBtn = popupDiv.querySelector<HTMLButtonElement>("#drop")!;
+      const msgDiv = popupDiv.querySelector<HTMLDivElement>("#dropMsg")!;
+      dropBtn.addEventListener("click", () => {
+        const playerCell = getPlayerCell();
+        const dist = cellDistance(playerCell, [i, j]);
+        if (dist > PROXIMITY_CELLS) {
+          msgDiv.innerText = `Too far (${dist} cells). Move closer to drop.`;
+          return;
+        }
+        if (inventory === null) {
+          msgDiv.innerText = "You have no token to drop.";
+          return;
+        }
+        const key = `${i},${j}`;
+        if (caches.has(key)) {
+          msgDiv.innerText = "There is already a cache here.";
+          return;
+        }
+        // Create a new cache marker with the carried token value
+        const center = bounds.getCenter();
+        const val = inventory!;
+        const cacheMarker = leaflet.circleMarker(center, {
+          radius: 6,
+          color: "#222222",
+          fillOpacity: 0.9,
+        });
+        cacheMarker.addTo(map);
+        caches.set(key, { marker: cacheMarker, value: val });
+        // Bind popup on the newly created cache so it can be picked/placed
+        cacheMarker.bindPopup(() => {
+          const popupDiv = document.createElement("div");
+          const cached = caches.get(key)!;
+          popupDiv.innerHTML = `
+                  <div>There is a cache here at "${i},${j}". It has value <span id="value">${cached.value}</span>.</div>
+                  <button id="pickup">Pick up</button>
+                  <button id="place" style="margin-left:.5rem">Place token</button>
+                  <div id="pickupMsg" style="margin-top:.4rem;color:#b10000"></div>`;
+
+          const pickupBtn = popupDiv.querySelector<HTMLButtonElement>(
+            "#pickup",
+          )!;
+          const placeBtn = popupDiv.querySelector<HTMLButtonElement>("#place")!;
+          const msgDiv = popupDiv.querySelector<HTMLDivElement>("#pickupMsg")!;
+
+          pickupBtn.addEventListener("click", () => {
+            const playerCell = getPlayerCell();
+            const dist = cellDistance(playerCell, [i, j]);
+            if (dist <= PROXIMITY_CELLS) {
+              if (inventory === null) {
+                // pick up: remove marker and store value
+                cached.marker.remove();
+                caches.delete(key);
+                inventory = cached.value;
+                updateInventoryDisplay();
+                renderCraftingUI();
+                msgDiv.innerText = "Picked up.";
+                // refresh colors for remaining caches
+                updateAllCacheColors();
+              } else {
+                msgDiv.innerText =
+                  "You're already carrying a token. Drop it before picking up another.";
+              }
+            } else {
+              msgDiv.innerText =
+                `Too far (${dist} cells). Move within ${PROXIMITY_CELLS} cells to pick up.`;
+            }
+          });
+
+          placeBtn.addEventListener("click", () => {
+            const playerCell = getPlayerCell();
+            const dist = cellDistance(playerCell, [i, j]);
+            if (dist > PROXIMITY_CELLS) {
+              msgDiv.innerText =
+                `Too far (${dist} cells). Move within ${PROXIMITY_CELLS} cells to place.`;
+              return;
+            }
+            if (inventory === null) {
+              msgDiv.innerText = "You have no token to place.";
+              return;
+            }
+            // Combine if values match
+            if (inventory === cached.value) {
+              cached.value = cached.value * 2;
+              // update visible value in popup
+              const valSpan = popupDiv.querySelector<HTMLSpanElement>("#value");
+              if (valSpan) valSpan.innerText = String(cached.value);
+              // consume carried token
+              inventory = null;
+              updateInventoryDisplay();
+              renderCraftingUI();
+              msgDiv.innerText = `Placed token and crafted ${cached.value}.`;
+              // after placing, update colors (player now empty-handed)
+              updateAllCacheColors();
+              // Trigger win when the cache reaches or exceeds the threshold
+              if (!hasCrafted && cached.value >= WIN_THRESHOLD) {
+                triggerWin();
+              }
+            } else {
+              msgDiv.innerText =
+                "Token values do not match; cannot place here.";
+            }
+          });
+
+          return popupDiv;
+        });
+        inventory = null;
+        updateInventoryDisplay();
+        renderCraftingUI();
+        msgDiv.innerText = `Dropped token (${val}).`;
+        updateAllCacheColors();
+      });
+      return popupDiv;
+    });
   }
   // Return the rectangle so callers can keep track of rendered cells
   return rect;
