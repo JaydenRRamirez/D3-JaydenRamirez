@@ -36,4 +36,4 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 - [x] Make it so cells forget their state when they aren't visible on screen. Players should farm tokens by moving in and out of the visibility range. As the player moves, cells continue to be visible all the way out to the edge of the map.
 - [x] Make it so players can craft tokens of a higher value, update and increase threshold value for the win state.
 - [x] Revert the Forget state for cells. Restructure in that unmodified cells not visible do not require memory for storage
-- [] Ensure the state of modified cells when they are off-screen, and restored when back in view.
+- [x] Ensure the state of modified cells when they are off-screen, and restored when back in view.

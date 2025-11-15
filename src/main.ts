@@ -72,12 +72,37 @@ const caches = new Map<
   { marker: leaflet.CircleMarker; value: number }
 >();
 
-// Persisted modifications by the player. If a cell key exists here it means
-// the player changed the default state: the value is `number` for a token
-// present, or `null` for an explicitly emptied cell. Cells not present in
-// this map are ephemeral and will be respawned deterministically when
-// coming back into view.
+// -- Modifed Cache Tracking --
 const modifiedCaches = new Map<string, number | null>();
+
+const MODIFIED_CACHE_STORAGE_KEY = "d3.modifiedCaches.v1";
+
+function modifiedCacheSaves() {
+  try {
+    const arr: Array<[string, number | null]> = Array.from(
+      modifiedCaches.entries(),
+    );
+    localStorage.setItem(MODIFIED_CACHE_STORAGE_KEY, JSON.stringify(arr));
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
+function loadModifiedCaches() {
+  try {
+    const raw = localStorage.getItem(MODIFIED_CACHE_STORAGE_KEY);
+    if (!raw) return;
+    const arr = JSON.parse(raw) as Array<[string, number | null]>;
+    for (const [k, v] of arr) modifiedCaches.set(k, v);
+  } catch {
+    /* ignore parse errors */
+  }
+}
+
+function setModifiedCache(key: string, value: number | null) {
+  modifiedCaches.set(key, value);
+  modifiedCacheSaves();
+}
 
 type CellRecord = {
   i: number;
@@ -377,7 +402,7 @@ function drawCell(i: number, j: number) {
           cacheMarker.addTo(map);
           caches.set(key, { marker: cacheMarker, value: val });
           // Modification remains off-screen
-          modifiedCaches.set(key, val);
+          setModifiedCache(key, val);
           cacheMarker.bindPopup(() => {
             const popupDiv = document.createElement("div");
             const cached = caches.get(key)!;
@@ -406,7 +431,7 @@ function drawCell(i: number, j: number) {
                   caches.delete(key);
                   inventory = cached.value;
                   // Modification remains off-screen
-                  modifiedCaches.set(key, null);
+                  setModifiedCache(key, null);
                   updateInventoryDisplay();
                   renderCraftingUI();
                   msgDiv.innerText = "Picked up.";
@@ -436,7 +461,7 @@ function drawCell(i: number, j: number) {
               // Combine if values match
               if (inventory === cached.value) {
                 cached.value = cached.value * 2;
-                modifiedCaches.set(key, cached.value);
+                setModifiedCache(key, cached.value);
                 const valSpan = popupDiv.querySelector<HTMLSpanElement>(
                   "#value",
                 );
@@ -497,7 +522,7 @@ function drawCell(i: number, j: number) {
               caches.delete(key);
               inventory = cached.value;
               // Modification remains off-screen
-              modifiedCaches.set(key, null);
+              setModifiedCache(key, null);
               updateInventoryDisplay();
               renderCraftingUI();
               msgDiv.innerText = "Picked up.";
@@ -526,7 +551,7 @@ function drawCell(i: number, j: number) {
           }
           if (inventory === cached.value) {
             cached.value = cached.value * 2;
-            modifiedCaches.set(key, cached.value);
+            setModifiedCache(key, cached.value);
             const valSpan = popupDiv.querySelector<HTMLSpanElement>("#value");
             if (valSpan) valSpan.innerText = String(cached.value);
             inventory = null;
@@ -586,7 +611,7 @@ function drawCell(i: number, j: number) {
               caches.delete(key);
               inventory = cached.value;
               // Modification remains off-screen
-              modifiedCaches.set(key, null);
+              setModifiedCache(key, null);
               updateInventoryDisplay();
               renderCraftingUI();
               msgDiv.innerText = "Picked up.";
@@ -617,7 +642,7 @@ function drawCell(i: number, j: number) {
           if (inventory === cached.value) {
             cached.value = cached.value * 2;
             // persist the modified value
-            modifiedCaches.set(key, cached.value);
+            setModifiedCache(key, cached.value);
             const valSpan = popupDiv.querySelector<HTMLSpanElement>("#value");
             if (valSpan) valSpan.innerText = String(cached.value);
             inventory = null;
@@ -642,6 +667,9 @@ function drawCell(i: number, j: number) {
   return rect;
 }
 
+// Load persisted modified cells before rendering the initial view so player
+// edits are restored when cells are rendered.
+loadModifiedCaches();
 updateVisibleCells();
 
 map.on("moveend", () => {
