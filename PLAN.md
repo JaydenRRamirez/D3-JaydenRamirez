@@ -26,6 +26,9 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 - [x] draw the player's location on the map
 - [x] draw a rectangle representing one cell on the map
 - [x] use loops to draw a whole grid of cells on the map
+
+## D3.b: Globe-spanning Gameplay
+
 - [x] Inventory implementation. Pick up token from a cell, and ensure it is removed from cell.
 - [x] Display the value of Tokens owned.
 - [x] Crafting functionality. Be able to place a token of equal value then produce a token doubled the value of the original.
@@ -35,5 +38,15 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 - [x] Update Token interaction, so that tokens can only be interacted 1 cell near the player, instead of the current 3.
 - [x] Make it so cells forget their state when they aren't visible on screen. Players should farm tokens by moving in and out of the visibility range. As the player moves, cells continue to be visible all the way out to the edge of the map.
 - [x] Make it so players can craft tokens of a higher value, update and increase threshold value for the win state.
+
+## D3.c: Object persistence
+
 - [x] Revert the Forget state for cells. Restructure in that unmodified cells not visible do not require memory for storage
 - [x] Ensure the state of modified cells when they are off-screen, and restored when back in view.
+
+## D3.d: Gameplay Across Real-world Space and Time
+
+- [] Revamp movement system. Player can now move by moving their device around the real world, while also having the option to use the WSAD keys.
+- [] Ensure that when the player closes the game, the state of the world is saved, and when they return, it is restored.
+- [] Have a new game option that resets the world state.
+- [] Develop a function or button that switches the control scheme between real world movement and WSAD keys.
