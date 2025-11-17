@@ -46,7 +46,7 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 
 ## D3.d: Gameplay Across Real-world Space and Time
 
-- [] Revamp movement system. Player can now move by moving their device around the real world, while also having the option to use the WSAD keys.
+- [x] Revamp movement system. Player can now move by moving their device around the real world, while also having the option to use the WSAD keys.
+- [x] Develop a function or button that switches the control scheme between real world movement and WSAD keys.
 - [] Ensure that when the player closes the game, the state of the world is saved, and when they return, it is restored.
 - [] Have a new game option that resets the world state.
-- [] Develop a function or button that switches the control scheme between real world movement and WSAD keys.

@@ -222,6 +222,25 @@ function renderCraftingUI() {
   p4.innerHTML =
     `Win condition: craft a single cache with that has a value of 5 or beyond.`;
   controlPanelDiv.append(p4);
+
+  const controlRow = document.createElement("div");
+  controlRow.style.marginTop = "0.6rem";
+  const controlBtn = document.createElement("button");
+  controlBtn.id = "controlToggle";
+  controlBtn.innerText = "Control: Keyboard";
+  controlBtn.style.padding = "0.25rem 0.5rem";
+  controlBtn.addEventListener("click", () => {
+    const isKeyboard = controlBtn.innerText.includes("Keyboard");
+    if (isKeyboard) {
+      movement.setMode("device");
+      controlBtn.innerText = "Control: Device";
+    } else {
+      movement.setMode("keyboard");
+      controlBtn.innerText = "Control: Keyboard";
+    }
+  });
+  controlRow.append(controlBtn);
+  controlPanelDiv.append(controlRow);
 }
 
 // Render crafting UI initially and whenever inventory changes
@@ -335,15 +354,116 @@ function movePlayerByCells(latitudeUpdate: number, longitudeUpdate: number) {
   updateVisibleCells();
 }
 
-// Keyboard handling
-globalThis.addEventListener("keydown", (e: KeyboardEvent) => {
-  const tag = (document.activeElement && document.activeElement.tagName) || "";
-  if (tag === "INPUT" || tag === "TEXTAREA") return;
-  const key = e.key.toLowerCase();
-  if (key === "w") movePlayerByCells(1, 0);
-  else if (key === "s") movePlayerByCells(-1, 0);
-  else if (key === "a") movePlayerByCells(0, -1);
-  else if (key === "d") movePlayerByCells(0, 1);
+// Movement controller facade to abstract away keyboard vs device movement
+type movementConverter =
+  | { type: "step"; di: number; dj: number }
+  | { type: "position"; latlng: leaflet.LatLngExpression };
+
+interface movementController {
+  start(): void;
+  stop(): void;
+  onMove(cb: (p: movementConverter) => void): void;
+}
+
+// Helper to set player location from any controller
+function setPlayerLatLng(latlng: leaflet.LatLngExpression) {
+  const newLatLng = leaflet.latLng(latlng);
+  playerMarker.setLatLng(newLatLng);
+  try {
+    map.panTo(newLatLng);
+  } catch {
+    /* ignore */
+  }
+  updateVisibleCells();
+}
+
+// Keyboard-based movement: emits discrete cell steps
+class keyboardMovementController implements movementController {
+  private callbacks: Array<(p: movementConverter) => void> = [];
+  private keyHandler = (e: KeyboardEvent) => {
+    const tag = (document.activeElement && document.activeElement.tagName) ||
+      "";
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    const key = e.key.toLowerCase();
+    if (key === "w") this.emit({ type: "step", di: 1, dj: 0 });
+    else if (key === "s") this.emit({ type: "step", di: -1, dj: 0 });
+    else if (key === "a") this.emit({ type: "step", di: 0, dj: -1 });
+    else if (key === "d") this.emit({ type: "step", di: 0, dj: 1 });
+  };
+  start() {
+    globalThis.addEventListener("keydown", this.keyHandler);
+  }
+  stop() {
+    globalThis.removeEventListener("keydown", this.keyHandler);
+  }
+  onMove(cb: (p: movementConverter) => void) {
+    this.callbacks.push(cb);
+  }
+  private emit(p: movementConverter) {
+    for (const c of this.callbacks) c(p);
+  }
+}
+
+// Device-based movement: uses Geolocation API to follow device location
+class deviceMovementController implements movementController {
+  private callbacks: Array<(p: movementConverter) => void> = [];
+  private watchId: number | null = null;
+  start() {
+    if (!navigator.geolocation) return;
+    this.watchId = navigator.geolocation.watchPosition((pos) => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      for (const c of this.callbacks) {
+        c({ type: "position", latlng: leaflet.latLng(lat, lng) });
+      }
+    }, () => {
+      /* ignore errors */
+    }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 });
+  }
+  stop() {
+    if (this.watchId !== null) {
+      navigator.geolocation.clearWatch(this.watchId);
+      this.watchId = null;
+    }
+  }
+  onMove(cb: (p: movementConverter) => void) {
+    this.callbacks.push(cb);
+  }
+}
+
+// Facade to swap and manage movement controllers
+class movementFacade {
+  private keyboard = new keyboardMovementController();
+  private device = new deviceMovementController();
+  private active: movementController | null = null;
+  private callbacks: Array<(p: movementConverter) => void> = [];
+  constructor() {
+    this.keyboard.onMove((p) => this.emit(p));
+    this.device.onMove((p) => this.emit(p));
+  }
+  setMode(mode: "keyboard" | "device") {
+    if (this.active) this.active.stop();
+    if (mode === "keyboard") this.active = this.keyboard;
+    else this.active = this.device;
+    this.active.start();
+  }
+  onMove(cb: (p: movementConverter) => void) {
+    this.callbacks.push(cb);
+  }
+  private emit(p: movementConverter) {
+    for (const c of this.callbacks) c(p);
+  }
+}
+
+const movement = new movementFacade();
+// Start in keyboard mode by default
+movement.setMode("keyboard");
+movement.onMove((payload) => {
+  if (payload.type === "step") {
+    movePlayerByCells(payload.di, payload.dj);
+  } else if (payload.type === "position") {
+    setPlayerLatLng(payload.latlng);
+  }
 });
 
 // Draw a single rectangular cell on the map at cell coordinates i,j
