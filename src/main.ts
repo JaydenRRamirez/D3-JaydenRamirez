@@ -149,6 +149,26 @@ function triggerWin() {
   document.body.append(overlay);
 }
 
+function newGame() {
+  // Clear all caches and modified cache records
+  for (const cache of caches.values()) {
+    try {
+      cache.marker.remove();
+    } catch {
+      /* ignore */
+    }
+  }
+  caches.clear();
+  modifiedCaches.clear();
+  modifiedCacheSaves();
+
+  // Reset player position
+  setPlayerLatLng(CLASSROOM_LATLNG);
+  inventory = null;
+  updateInventoryDisplay();
+  renderCraftingUI();
+}
+
 // Update cache marker colors: green = pickable, red = out of reach or blocked
 function updateCacheMarkerColor(key: string) {
   const entry = caches.get(key);
@@ -229,6 +249,7 @@ function renderCraftingUI() {
   controlBtn.id = "controlToggle";
   controlBtn.innerText = "Control: Keyboard";
   controlBtn.style.padding = "0.25rem 0.5rem";
+  controlBtn.style.marginRight = "0.5rem";
   controlBtn.addEventListener("click", () => {
     const isKeyboard = controlBtn.innerText.includes("Keyboard");
     if (isKeyboard) {
@@ -240,6 +261,16 @@ function renderCraftingUI() {
     }
   });
   controlRow.append(controlBtn);
+
+  const newGameBtn = document.createElement("button");
+  newGameBtn.innerText = "New Game";
+  newGameBtn.style.padding = "0.25rem 0.5rem";
+  newGameBtn.addEventListener("click", () => {
+    if (confirm("Start a new game? This will reset all progress.")) {
+      newGame();
+    }
+  });
+  controlRow.append(newGameBtn);
   controlPanelDiv.append(controlRow);
 }
 
