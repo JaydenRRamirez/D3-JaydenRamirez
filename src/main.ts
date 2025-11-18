@@ -77,11 +77,11 @@ function getFlyweight(value: number) {
   if (!tokenFlyweights.has(value)) {
     // Define style once per value — this is the flyweight!
     const colors: Record<number, string> = {
-      1: "#feec4c",
-      2: "#ffd55e",
-      3: "#ffb482",
+      1: "#ffe600ff",
+      2: "#00fdfdff",
+      3: "#9982ffff",
       4: "#ff8a5f",
-      5: "#ff5e3a",
+      5: "#ff00ddff",
     };
     tokenFlyweights.set(value, {
       color: "#2a9d41",
@@ -589,22 +589,22 @@ function drawCell(i: number, j: number) {
       else if (r < 0.97) cacheValue = 3;
       else if (r < 0.995) cacheValue = 4;
       else cacheValue = 5;
+      setModifiedCache(key, cacheValue);
     }
   }
+  const currentCacheValue = modifiedCaches.get(key);
 
   // --- Render Cache Marker and Bind Popup if a value is present ---
-  if (cacheValue !== null && cacheValue !== undefined) {
+  if (currentCacheValue !== null && currentCacheValue !== undefined) {
     const initialCacheValue = cacheValue;
 
     // Draw the token marker using the flyweight
-    const marker = drawToken(i, j, initialCacheValue, bounds);
+    const marker = drawToken(i, j, currentCacheValue, bounds);
 
     // Bind the unified popup logic to the marker
     marker.bindPopup(() => {
       // Use the current value from modifiedCaches (if present) or the initial spawn value
-      let currentCacheValue = modifiedCaches.has(key)
-        ? modifiedCaches.get(key)
-        : initialCacheValue;
+      let popupCacheValue = modifiedCaches.get(key)!;
 
       const popupDiv = document.createElement("div");
       popupDiv.innerHTML = `
@@ -623,7 +623,7 @@ function drawCell(i: number, j: number) {
         if (dist <= PROXIMITY_CELLS) {
           if (inventory === null) {
             // Retrieve the value right before pickup
-            currentCacheValue = modifiedCaches.has(key)
+            popupCacheValue = modifiedCaches.has(key)
               ? modifiedCaches.get(key)!
               : initialCacheValue!;
 
@@ -662,7 +662,7 @@ function drawCell(i: number, j: number) {
         }
 
         // Retrieve the value right before placement
-        currentCacheValue = modifiedCaches.has(key)
+        popupCacheValue = modifiedCaches.has(key)
           ? modifiedCaches.get(key)!
           : initialCacheValue!;
 
