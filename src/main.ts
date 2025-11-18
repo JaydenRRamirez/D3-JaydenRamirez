@@ -589,26 +589,26 @@ function drawCell(i: number, j: number) {
       else if (r < 0.97) cacheValue = 3;
       else if (r < 0.995) cacheValue = 4;
       else cacheValue = 5;
+
       setModifiedCache(key, cacheValue);
     }
   }
+
+  // Use the current persisted value (which now includes newly spawned tokens)
   const currentCacheValue = modifiedCaches.get(key);
 
   // --- Render Cache Marker and Bind Popup if a value is present ---
   if (currentCacheValue !== null && currentCacheValue !== undefined) {
-    const initialCacheValue = cacheValue;
-
     // Draw the token marker using the flyweight
     const marker = drawToken(i, j, currentCacheValue, bounds);
 
     // Bind the unified popup logic to the marker
     marker.bindPopup(() => {
-      // Use the current value from modifiedCaches (if present) or the initial spawn value
-      let popupCacheValue = modifiedCaches.get(key)!;
+      const displayValue = modifiedCaches.get(key)!;
 
       const popupDiv = document.createElement("div");
       popupDiv.innerHTML = `
-                  <div>There is a cache here at "${i},${j}". It has value <span id="value">${currentCacheValue}</span>.</div>
+                  <div>There is a cache here at "${i},${j}". It has value <span id="value">${displayValue}</span>.</div>
                   <button id="pickup">Pick up</button>
                   <button id="place" style="margin-left:.5rem">Place token</button>
                   <div id="pickupMsg" style="margin-top:.4rem;color:#b10000"></div>`;
@@ -622,14 +622,12 @@ function drawCell(i: number, j: number) {
         const dist = cellDistance(playerCell, [i, j]);
         if (dist <= PROXIMITY_CELLS) {
           if (inventory === null) {
-            // Retrieve the value right before pickup
-            popupCacheValue = modifiedCaches.has(key)
-              ? modifiedCaches.get(key)!
-              : initialCacheValue!;
+            // FIX: Retrieve the value right before pickup from the single source of truth
+            const pickupValue = modifiedCaches.get(key)!;
 
             marker.remove();
             caches.delete(key);
-            inventory = currentCacheValue;
+            inventory = pickupValue;
 
             // Record that the cell is now empty/modified
             setModifiedCache(key, null);
@@ -661,14 +659,12 @@ function drawCell(i: number, j: number) {
           return;
         }
 
-        // Retrieve the value right before placement
-        popupCacheValue = modifiedCaches.has(key)
-          ? modifiedCaches.get(key)!
-          : initialCacheValue!;
+        // FIX: Retrieve the current value right before placement
+        const cacheValueToCombine = modifiedCaches.get(key)!;
 
         // Combine if values match
-        if (inventory === currentCacheValue) {
-          const newCacheValue = currentCacheValue * 2;
+        if (inventory === cacheValueToCombine) {
+          const newCacheValue = cacheValueToCombine * 2; // FIX: Use the retrieved value
 
           // Persist the modified value
           setModifiedCache(key, newCacheValue);
