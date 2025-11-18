@@ -135,6 +135,48 @@ type CellRecord = {
 // Keep a record of currently rendered cells keyed by "i,j".
 const cellRecords = new Map<string, CellRecord>();
 
+// --- State Persistence and Game Logic ---
+
+const GAME_STATE_STORAGE_KEY = "d3.gameState";
+
+interface GameState {
+  inventory: number | null;
+  playerLat: number;
+  playerLng: number;
+  hasCrafted: boolean;
+}
+
+function saveGameState() {
+  const currentPos = playerMarker.getLatLng();
+  const state: GameState = {
+    inventory,
+    playerLat: currentPos.lat,
+    playerLng: currentPos.lng,
+    hasCrafted: hasCrafted,
+  };
+  try {
+    localStorage.setItem(GAME_STATE_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
+function loadGameState() {
+  try {
+    const raw = localStorage.getItem(GAME_STATE_STORAGE_KEY);
+    if (!raw) return false;
+    const state = JSON.parse(raw) as GameState;
+    inventory = state.inventory;
+    setPlayerLatLng(leaflet.latLng(state.playerLat, state.playerLng));
+    hasCrafted = state.hasCrafted;
+    return true;
+  } catch {
+    /* ignore parse errors */
+    return false;
+  }
+}
+
+globalThis.addEventListener("beforeunload", saveGameState);
 // Win state
 let hasCrafted = false;
 
@@ -189,6 +231,9 @@ function newGame() {
   inventory = null;
   updateInventoryDisplay();
   renderCraftingUI();
+  saveGameState();
+  hasCrafted = false;
+  inventory = null;
 }
 
 // Update the color of a cache marker based on player proximity
@@ -748,6 +793,15 @@ function drawCell(i: number, j: number) {
 
 // Load persisted modified cells before rendering the initial view so player edits are restored when cells are rendered.
 loadModifiedCaches();
+const loaded = loadGameState();
+
+// If no saved state, ensure we save the initial state.
+if (!loaded) {
+  saveGameState();
+}
+
+updateInventoryDisplay();
+renderCraftingUI();
 updateVisibleCells();
 
 map.on("moveend", () => {
