@@ -37,7 +37,7 @@ const CACHE_SPAWN_PROBABILITY = 0.1;
 // How many cells away (inclusive) the player can interact with a cache
 const PROXIMITY_CELLS = 1;
 // Value required on a single cache to win the game
-const WIN_THRESHOLD = 5;
+const WIN_THRESHOLD = 100;
 
 // Create the map (element with id "map" is defined in index.html)
 const map = leaflet.map(mapDiv, {
@@ -77,11 +77,19 @@ function getFlyweight(value: number) {
   if (!tokenFlyweights.has(value)) {
     // Define style once per value — this is the flyweight!
     const colors: Record<number, string> = {
-      1: "#ffe600ff",
-      2: "#00fdfdff",
-      3: "#9982ffff",
-      4: "#ff8a5f",
-      5: "#ff00ddff",
+      5: "#ffe600ff",
+      10: "#00fdfdff",
+      15: "#9982ffff",
+      20: "#ff8a5f",
+      25: "#ff00ddff",
+      30: "#ff0000ff",
+      40: "#0d0086ff",
+      50: "#8cb136ff",
+      60: "#74480eff",
+      70: "#00ff3fff",
+      80: "#ff6effff",
+      90: "#00b3b3ff",
+      100: "#ffffff00",
     };
     tokenFlyweights.set(value, {
       color: "#2a9d41",
@@ -313,7 +321,7 @@ function renderCraftingUI() {
   const p4 = document.createElement("div");
   p4.style.marginTop = "0.6rem";
   p4.innerHTML =
-    `Win condition: craft a single cache with that has a value of 5 or beyond.`;
+    `Win condition: craft a single cache with that has a value of 100 or beyond.`;
   controlPanelDiv.append(p4);
 
   const controlRow = document.createElement("div");
@@ -629,11 +637,11 @@ function drawCell(i: number, j: number) {
     if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
       // Bias values toward 1 and 2 but occasionally spawn larger tokens
       const r = luck([i, j, "initialValue"].toString());
-      if (r < 0.6) cacheValue = 1;
-      else if (r < 0.9) cacheValue = 2;
-      else if (r < 0.97) cacheValue = 3;
-      else if (r < 0.995) cacheValue = 4;
-      else cacheValue = 5;
+      if (r < 0.6) cacheValue = 5;
+      else if (r < 0.9) cacheValue = 10;
+      else if (r < 0.97) cacheValue = 15;
+      else if (r < 0.995) cacheValue = 20;
+      else cacheValue = 25;
 
       setModifiedCache(key, cacheValue);
     }
