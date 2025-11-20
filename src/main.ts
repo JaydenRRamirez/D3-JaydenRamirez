@@ -471,7 +471,7 @@ type movementConverter =
   | { type: "step"; di: number; dj: number }
   | { type: "position"; latlng: leaflet.LatLngExpression };
 
-interface movementController {
+interface MovementController {
   start(): void;
   stop(): void;
   onMove(cb: (p: movementConverter) => void): void;
@@ -490,7 +490,7 @@ function setPlayerLatLng(latlng: leaflet.LatLngExpression) {
 }
 
 // Keyboard-based movement: emits discrete cell steps
-class keyboardMovementController implements movementController {
+class keyboardMovementController implements MovementController {
   private callbacks: Array<(p: movementConverter) => void> = [];
   private keyHandler = (e: KeyboardEvent) => {
     const tag = (document.activeElement && document.activeElement.tagName) ||
@@ -517,7 +517,7 @@ class keyboardMovementController implements movementController {
 }
 
 // Device-based movement: uses Geolocation API to follow device location
-class deviceMovementController implements movementController {
+class deviceMovementController implements MovementController {
   private callbacks: Array<(p: movementConverter) => void> = [];
   private watchId: number | null = null;
   start() {
@@ -547,7 +547,7 @@ class deviceMovementController implements movementController {
 class movementFacade {
   private keyboard = new keyboardMovementController();
   private device = new deviceMovementController();
-  private active: movementController | null = null;
+  private active: MovementController | null = null;
   private callbacks: Array<(p: movementConverter) => void> = [];
   constructor() {
     this.keyboard.onMove((p) => this.emit(p));
@@ -580,12 +580,12 @@ movement.onMove((payload) => {
 
 // Draw a token marker using the Flyweight pattern.
 function drawToken(
-  i: number,
-  j: number,
+  lat: number,
+  lng: number,
   value: number,
   bounds: leaflet.LatLngBounds,
 ) {
-  const key = cellKey(i, j);
+  const key = cellKey(lat, lng);
   // Get the flyweight (intrinsic state) for this token value
   const flyweight = getFlyweight(value);
 
@@ -606,14 +606,14 @@ function drawToken(
 }
 
 // Draw a cell at (i,j)
-function drawCell(i: number, j: number) {
+function drawCell(x: number, y: number) {
   const origin = CLASSROOM_LATLNG;
 
   const bounds = leaflet.latLngBounds([
-    [origin.lat + i * TILE_DEGREES, origin.lng + j * TILE_DEGREES],
+    [origin.lat + x * TILE_DEGREES, origin.lng + y * TILE_DEGREES],
     [
-      origin.lat + (i + 1) * TILE_DEGREES,
-      origin.lng + (j + 1) * TILE_DEGREES,
+      origin.lat + (x + 1) * TILE_DEGREES,
+      origin.lng + (y + 1) * TILE_DEGREES,
     ],
   ]);
 
@@ -623,12 +623,12 @@ function drawCell(i: number, j: number) {
     fillOpacity: 0.12,
   })).addTo(map);
 
-  const key = `${i},${j}`;
+  const key = `${x},${y}`;
   const modified = modifiedCaches.get(key);
 
   let cacheValue: number | null = null;
 
-  cacheValue = generateCacheValue(modified, cacheValue, i, j, key);
+  cacheValue = generateCacheValue(modified, cacheValue, x, y, key);
 
   // Use the current persisted value (which now includes newly spawned tokens)
   const currentCacheValue = modifiedCaches.get(key);
@@ -638,20 +638,20 @@ function drawCell(i: number, j: number) {
     // Draw the token marker using the flyweight
 
     // Bind the unified popup logic to the marker
-    (drawToken(i, j, currentCacheValue, bounds)).bindPopup(() => {
+    (drawToken(x, y, currentCacheValue, bounds)).bindPopup(() => {
       const displayValue = modifiedCaches.get(key)!;
 
       const popupDiv = document.createElement("div");
       popupDiv.innerHTML = `
-                  <div>There is a cache here at "${i},${j}". It has value <span id="value">${displayValue}</span>.</div>
+                  <div>There is a cache here at "${x},${y}". It has value <span id="value">${displayValue}</span>.</div>
                   <button id="pickup">Pick up</button>
                   <button id="place" style="margin-left:.5rem">Place token</button>
                   <div id="pickupMsg" style="margin-top:.4rem;color:#b10000"></div>`;
 
       const { placeBtn, msgDiv } = pickupToken(
         popupDiv,
-        i,
-        j,
+        x,
+        y,
         key,
         currentCacheValue,
         bounds,
@@ -659,8 +659,8 @@ function drawCell(i: number, j: number) {
 
       placeToken(
         placeBtn,
-        i,
-        j,
+        x,
+        y,
         msgDiv,
         key,
         popupDiv,
@@ -681,7 +681,7 @@ function drawCell(i: number, j: number) {
       })).bindPopup(() => {
         const popupDiv = document.createElement("div");
         popupDiv.innerHTML = `
-                <div>Cell: ${i}, ${j} (Empty)</div>
+                <div>Cell: ${x}, ${y} (Empty)</div>
                 <button id="drop">Drop token here</button>
                 <div id="dropMsg" style="margin-top:.4rem;color:#b10000"></div>`;
         const msgDiv = popupDiv.querySelector<HTMLDivElement>("#dropMsg")!;
@@ -690,7 +690,7 @@ function drawCell(i: number, j: number) {
           "click",
           () => {
             const playerCell = getPlayerCell();
-            const dist = cellDistance(playerCell, [i, j]);
+            const dist = cellDistance(playerCell, [x, y]);
             if (dist > PROXIMITY_CELLS) {
               msgDiv.innerText =
                 `Too far (${dist} cells). Move closer to drop.`;
@@ -703,7 +703,7 @@ function drawCell(i: number, j: number) {
             const val = inventory!;
 
             // Draw the new token marker
-            drawToken(i, j, val, bounds);
+            drawToken(x, y, val, bounds);
 
             // Persist the dropped token's value
             setModifiedCache(key, val);
@@ -731,7 +731,7 @@ function drawCell(i: number, j: number) {
         color: "#1f78b4",
         weight: 2,
         fillOpacity: 0.12,
-      })).bindPopup(`Cell: ${i}, ${j}`);
+      })).bindPopup(`Cell: ${x}, ${y}`);
     }
   }
 
