@@ -528,8 +528,10 @@ class deviceMovementController implements MovementController {
       for (const c of this.callbacks) {
         c({ type: "position", latlng: leaflet.latLng(lat, lng) });
       }
-    }, () => {
-      /* ignore errors */
+    }, (error) => {
+      alert(
+        `Geolocation Failed! Code: ${error.code}. Message: ${error.message}`,
+      );
     }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 });
   }
   stop() {
