@@ -33,14 +33,22 @@
   height: 100vh;
 }
 
-/* Responsive: on narrow screens, stack panels above each other */
+/* Responsive: on narrow screens (Mobile Styles) */
 @media (max-width: 640px) {
   #controlPanel {
     left: 0.5rem;
     right: 0.5rem;
     max-width: none;
-    bottom: 5.5rem; /* leave room for status panel */
+    bottom: 5.5rem;
   }
+
+  /* When collapsed, move control panel down to align with status panel */
+  #controlPanel.collapsed {
+    bottom: 1rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
   #statusPanel {
     left: 0.5rem;
     right: 0.5rem;

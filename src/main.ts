@@ -294,35 +294,53 @@ function updateInventoryDisplay() {
 updateInventoryDisplay();
 
 // --- UI ---
+
+// New implementation of collapsible control panel
+let controlPanelCollapsed = true;
 function renderCraftingUI() {
   controlPanelDiv.innerHTML = "";
-  const title = document.createElement("div");
-  title.innerText = "Instructions";
-  title.style.fontWeight = "600";
-  title.style.marginBottom = "0.5rem";
-  controlPanelDiv.append(title);
+
+  const headerDiv = document.createElement("div");
+  headerDiv.className = "controlPanelHeader";
+  headerDiv.style.fontWeight = "600";
+  headerDiv.style.cursor = "pointer";
+
+  // Indicator for collapse/expand state
+  const indicator = document.createElement("span");
+  indicator.id = "collapseIndicator";
+  indicator.style.marginRight = "0.5rem";
+
+  const titleText = document.createElement("span");
+  titleText.innerText = "Instructions and Controls";
+
+  headerDiv.append(indicator, titleText);
+  controlPanelDiv.append(headerDiv);
+
+  const contentDiv = document.createElement("div");
+  contentDiv.id = "controlPanelContent";
+  controlPanelDiv.append(contentDiv);
 
   const p1 = document.createElement("div");
   p1.innerHTML =
     `Click on a cache indicated by the various markers on display. Green means you can pick it up, red means it's out of reach or blocked.`;
   p1.style.marginBottom = "0.5rem";
-  controlPanelDiv.append(p1);
+  contentDiv.append(p1);
 
   const p2 = document.createElement("div");
   p2.innerHTML =
     `Pick up: Open a cache popup within ${PROXIMITY_CELLS} cells and click <strong>Pick up</strong>. You can carry at most one token.`;
   p2.style.marginBottom = "0.5rem";
-  controlPanelDiv.append(p2);
+  contentDiv.append(p2);
 
   const p3 = document.createElement("div");
   p3.innerHTML =
     `Place: Open a cache popup on a cell that contains a token of the same value and click <strong>Place token</strong> to combine them.`;
-  controlPanelDiv.append(p3);
+  contentDiv.append(p3);
   const p4 = document.createElement("div");
   p4.style.marginTop = "0.6rem";
   p4.innerHTML =
     `Win condition: craft a single cache with that has a value of 100 or beyond.`;
-  controlPanelDiv.append(p4);
+  contentDiv.append(p4);
 
   const controlRow = document.createElement("div");
   controlRow.style.marginTop = "0.6rem";
@@ -352,7 +370,32 @@ function renderCraftingUI() {
     }
   });
   controlRow.append(newGameBtn);
-  controlPanelDiv.append(controlRow);
+  contentDiv.append(controlRow); // Appending to contentDiv
+
+  // Function to update the control panel state
+  function updateControlPanelState() {
+    if (controlPanelCollapsed) {
+      contentDiv.style.display = "none";
+      indicator.innerText = "🔺";
+    } else {
+      contentDiv.style.display = "block";
+      indicator.innerText = "🔻";
+    }
+    // Also update the class for CSS styling
+    if (controlPanelCollapsed) {
+      controlPanelDiv.classList.add("collapsed");
+    } else {
+      controlPanelDiv.classList.remove("collapsed");
+    }
+  }
+
+  headerDiv.addEventListener("click", () => {
+    controlPanelCollapsed = !controlPanelCollapsed;
+    updateControlPanelState();
+  });
+
+  // Set the initial state
+  updateControlPanelState();
 }
 
 // Render crafting UI initially and whenever inventory changes
